@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "speaker_mkII")(type "KiCad")(uri "${KIPRJMOD}/speaker_mkII.kicad_sym")(options "")(descr ""))
+)
