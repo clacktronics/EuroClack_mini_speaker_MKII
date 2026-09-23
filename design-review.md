@@ -69,7 +69,7 @@ The speaker's 10 W rating assumes a 150 Hz 2nd-order high-pass filter. The desig
    - The virtual rail becomes 4 × V_PLIMIT ≈ 6.8 V peak, which is about 6.3 V peak across the speaker.
    - That keeps excursion at the mechanical limit even at DC-to-Fs, and sits close to TI's own 1.76 V example (Table 3).
    - Sine power is then about 5 W and clipped square about 10 W, which matches the speaker's 10 W rating.
-   - Limit mode (SW1 closed, R6 ∥ R8) becomes V_PLIMIT ≈ 0.49 V, about 0.45 W, which is still a usable quiet mode.
+   - Limit mode (SW1 closed) is covered in [Power modes](#power-modes-eurorack-rail-vs-external-12-v) below. Its R8 needs re-scaling as well.
    - For the 4BE variant, 3.9k (≈1.94 V) is also safe.
    - GVDD load stays around 0.5–0.7 mA. Confirm on the bench that GVDD holds about 6.9 V.
 2. **Add a high-pass filter near 120–150 Hz.** Change **C13 and C9 from 1 µF to 22 nF**. With Zi = 60 kΩ ±20 %, the corner lands at about 100–150 Hz.
@@ -78,6 +78,38 @@ The speaker's 10 W rating assumes a 150 Hz 2nd-order high-pass filter. The desig
    - The response graph (Fig. 3.3.1) shows output already 10 dB down at 70 Hz, so almost no audible bass is lost.
 
 With both changes, the worst-case LF excursion stays within 7.2 mm p-p. Mid-band SPL at about 5 W is roughly 87 dB at 1 m (80 dB + 7 dB). +12 V draw falls to about 0.5 A average at full sine.
+
+### Power modes: Eurorack rail vs external 12 V
+
+**Designer intent:**
+- SW1 = "Limit" is for powering from the Eurorack +12 V rail, with a draw of about **100 mA max**.
+- The other position is for a planned **external 12 V DC jack**.
+
+**Both positions need a limit.** The Eurorack position needs one to hold the current budget. The external position needs one to protect the speaker (finding #5).
+
+Current estimate: I ≈ Iq + P_out / (η × 12 V), with Iq = 20 mA typical (35 mA max, SLOS528F §7.6) and η ≈ 0.7 at low power (an estimate). The worst case is a clipped or square-wave input, which Eurorack patches produce easily, where P = Vp² / R_L rather than Vp² / 2R_L.
+
+| Setting | Parts | V_PLIMIT | Output Vpk | Worst-case (square) power | Est. +12 V draw |
+|---------|-------|----------|------------|--------------------------|-----------------|
+| Current design, limit | R6 = 10k, R8 = 1k | 0.58 V | ≈2.1 V | ≈1.1 W | **≈155 mA, over budget** |
+| Current design, full | R6 = 10k | 3.45 V | rail (≈11.5 V) | ≈30 W | ≈1.5–3 A, and speaker damage |
+| **Proposed, Eurorack** | R6 = 3.3k, **R8 = 750 Ω** | 0.40 V | ≈1.5 V | ≈0.54 W (≈0.27 W sine) | **≈85 mA** (sine ≈50 mA) |
+| **Proposed, external 12 V** | R6 = 3.3k | 1.71 V | ≈6.3 V | ≈10 W (≈5 W sine) | ≈0.5 A sine, about 1.1 A square |
+
+- R6 ∥ R8 = 3.3k ∥ 750 Ω ≈ 611 Ω, so V_PLIMIT = 6.9 V × 611 / 10.6k ≈ 0.40 V. Use 680 Ω for more margin (≈75 mA), or 820 Ω for more volume (≈93 mA).
+- These figures are estimates. The 4 × V_PLIMIT rule has about ±13 % spread (§7.5: 6.75–8.75 V at V_PLIMIT = 2 V), and low-power efficiency is not specified. **Measure the +12 V current with a full-scale square wave in limit mode** and trim R8.
+- Size the external adapter for at least 1.5 A at 12 V.
+
+**Recommended: select the limit automatically instead of trusting the switch.** If the switch is left in "full" while on Eurorack power, the module will pull about 1 A from the bus. Instead, let the power source choose the mode:
+- **DC jack with a switch contact.** Use a barrel jack whose switch pin changes state when a plug is inserted, and wire that contact in place of SW1.
+  - With no plug (Eurorack power), R8 is connected and the module draws about 100 mA.
+  - With a plug in, R8 is disconnected and the module runs at the ≈5 W speaker-safe setting.
+  - SW1 can then be removed, or kept as a user "quiet" override (switch contact and SW1 in parallel).
+- **Power-path isolation.** If both supplies can be connected at once, the external 12 V must not back-feed the Eurorack bus.
+  - Use the jack's switch contact to disconnect the rail input.
+  - Or diode-OR the two inputs, with a Schottky or a second PMOS ideal diode per input.
+  - Q1's reverse-polarity protection should cover the DC jack too, because centre-negative 12 V adapters exist.
+- The 440 µF of bulk capacitance charges at hot-plug on either input. This is normal for Eurorack, but it is where the 100 mA figure is briefly exceeded.
 
 ### Mechanical fit on the panel
 - **Width:** the frame's widest point is set by the Ø46 mm ring (the mounting ears fall inside that, at about ±19.3 mm), so the speaker is about 46 mm wide. The 10HP panel is 50.5 mm, leaving about 2.2 mm each side. ✓ Vertically it spans y = 41.25–87.25, which is inside the 34.25–144.25 keep-in and clear of the main board at 124.25. ✓ Depth of about 26 mm is fine for Eurorack.
