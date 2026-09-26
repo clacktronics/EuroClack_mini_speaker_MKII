@@ -21,7 +21,7 @@ The main-board circuit closely follows TI's PBTL reference design (datasheet Fig
 |---|----------|-------|-------|---------|
 | 1 | **CRITICAL** | Q1 (AO3401A) gate-source voltage is −12 V in normal operation. That equals the datasheet absolute maximum (±12 V), with zero margin for rail tolerance or hot-plug transients. | main | [Q1](#q1-reverse-polarity-pmos) |
 | 2 | **CRITICAL** | The Rail_adaptor production files are stale. The Gerbers show a **14 × 22 mm** board but the PCB is **10 × 22 mm**. The BOM/CPL call for an **SMD 2×8 female socket** at a different position, but the PCB has a **THT 2×8 male header**. | rail | [Rail adaptor](#rail-adaptor) |
-| 3 | WARNING | The 2-pin power connectors number their pins in opposite order: Rail_adaptor J2 pin 1 = +12 V, main_board J2 pin 1 = GND. If they mate pin-1-to-pin-1 the module sees reversed polarity. Q1 blocks it, so nothing is damaged, but the module stays silent. | rail + main | [Power connectors](#power-interconnect-polarity) |
+| 3 | WARNING | *(Superseded by the DC-jack architecture.)* The 2-pin power connectors number their pins in opposite order: Rail_adaptor J2 pin 1 = +12 V, main_board J2 pin 1 = GND. With a DC plug and jack, use centre-positive on both, keep Q1 for reverse protection, and add a PTC in the adaptor as a backstop against SW1 being left in EXT. | rail + main | [Power connectors](#power-interconnect-polarity) |
 | 4 | WARNING | The JLC export turns `Cmts.User` into a `*-VScore.gbr` layer. On the main board that layer holds crosshair lines through the jack and pot centres, and on the panel it holds 54 dimension/annotation items. These could be read as V-cut lines or at least trigger an engineering query. | main, panel | [Fabrication outputs](#fabrication-outputs) |
 | 5 | **CRITICAL** | **The amplifier can destroy the speaker.** With the TEBM28C10-4B (4 Ω, 10 W rated, 2.8 mm p-p linear / 7.2 mm p-p mechanical excursion), full-rail drive delivers about 15 W sine and about 30 W clipped square wave. At low frequencies that is about 11.7 mm p-p cone excursion, well past the mechanical limit. The default PLIMIT (≈3.45 V) does not limit at all, and the input has no high-pass filter near the speaker's 150 Hz rating condition. | main | [Speaker](#speaker-tectonic-tebm28c10-4b) |
 | 6 | WARNING | Input level is far too hot for the gain. With 20 dB gain and 12 V PVCC, the amp clips at about 1.1 V peak input. A standard ±5 V Eurorack signal reaches that at about 45 % pot rotation, which turns #5 into square-wave drive. A ±10–12 V signal can push RINP past its 6.3 V absolute maximum. | main | [Input stage](#input-stage) |
@@ -100,33 +100,32 @@ Current estimate: I ≈ Iq + P_out / (η × 12 V), with Iq = 20 mA typical (35 m
 - These figures are estimates. The 4 × V_PLIMIT rule has about ±13 % spread (§7.5: 6.75–8.75 V at V_PLIMIT = 2 V), and low-power efficiency is not specified. **Measure the +12 V current with a full-scale square wave in limit mode** and trim R8.
 - Size the external adapter for at least 1.5 A at 12 V.
 
-**Recommended: select the limit automatically instead of trusting the switch.** If the switch is left in "full" while on Eurorack power, the module will pull about 1 A from the bus. Instead, let the power source choose the mode. This uses only JLC basic parts (AO3401A, 2N7002, SS14 or SS34 Schottky, resistors):
+**Power architecture (designer-confirmed):** the main board gets a **DC jack socket** as its only power input. Two sources can plug into it:
+- the Rail_adaptor, which has a DC **plug** on a cable, fed from the Eurorack +12 V;
+- an external 12 V adapter.
 
-```
-Eurorack +12V (J2) ──► D1 SS14 (C2480) ──┐
-        │                                  │
-        └─ 100k ─┬─ G  Q3 2N7002           ├──► +12V (common) ─► U2 PVCC …
-               100k    D ── R8 750Ω ── PLIMIT
-                 │     S ── GND            │
-                GND                        │
-DC jack +12V ──► Q1 AO3401A (D=jack, S=common, G: 100k→S, 100k→GND) ──┘
-SW1 (optional "quiet" override) in parallel with Q3 D–S
-```
+Only one source can be connected at a time, which simplifies things:
+- **No power-path OR-ing is needed.** The Schottky, the back-feed concern and the input-sensing 2N7002 from the earlier suggestion all go away.
+- **Keep one protector: Q1 (AO3401A) with the 100k/100k gate divider**, between the jack centre pin and +12 V. Some wall adapters are centre-negative, so it is needed for the external case.
+- Use the **centre-positive** convention on both the adaptor plug and the jack, and mark "12V ⊖–●–⊕" on the panel or PCB silk.
+  - With the powered side being the plug, the live +12 V contact is recessed inside the plug barrel, which is the safe orientation.
+  - This replaces the old 2-pin J2 pairing, so finding #3 (pin order) goes away once the headers are removed.
 
-- **Eurorack input: Schottky D1 (SS14, C2480; or SS34, C8678).**
-  - D1 gives reverse-polarity protection and stops the DC adapter from back-feeding the bus.
-  - At about 100 mA it drops roughly 0.3 V and dissipates about 30 mW.
-  - With this, Q1 no longer needs to sit on the Eurorack path.
-- **DC-jack input: Q1 AO3401A with the gate divider above.** At about 1 A the loss is only about 50 mW, where a Schottky would lose about 0.5 W.
-- **Automatic limit: Q3 (2N7002, C8545).** Its gate is fed from the Eurorack input through a 100k/100k divider (≈6 V against its ±20 V rating).
-  - Whenever Eurorack power is present, Q3 connects R8 and the module stays at about 85 mA.
-  - With only the DC jack connected, Q3 is off and the module runs at the ≈5 W speaker-safe setting.
-  - With both connected, it stays limited, which is the conservative case.
-  - Q3's RDS(on) of a few ohms is negligible against 750 Ω.
-- **Known limitation:** on Eurorack power alone, Q1 conducts backwards, putting about 11.7 V on the DC jack pins. That is harmless with nothing plugged in. With an unpowered adapter plugged in, a small current flows into its output capacitors, but the module is still in limited mode.
-  - To remove this, drive Q1's gate low through a second 2N7002 whose gate is fed from the jack input.
-  - Q1 then turns on only when the jack itself is powered, and its body diode blocks reverse current otherwise.
-- A barrel jack with a switch contact would also work, but it is not needed with this scheme.
+**The catch: the board cannot tell which source is connected.** Both are 12 V on the same two wires, so the limit has to be chosen by the user (SW1) or enforced upstream:
+1. **Make "limited" the default and label the switch clearly**, for example "RACK ≤100mA / EXT 12V".
+   - Using the values above, both positions are speaker-safe. The only risk is bus current if the switch is left in EXT while on the rail adaptor.
+2. **Put a backstop in the Rail_adaptor.** Add a resettable PTC fuse in the +12 V line so a mistake cannot pull about 1 A from the bus. Suitable parts:
+   - 1206 nSMD020 (C69680, 0.2 A hold); or
+   - 0805 JK-SMD0805-020-30V (C516070, 0.2 A hold).
+
+   These are JLC **extended** parts, not basic (the `lcsc` search found no basic PTCs). The adaptor is hand-assembled THT anyway, so hand-fitting a PTC costs nothing extra.
+   - With SW1 in the wrong position, the PTC trips within seconds under loud playback. The module cuts out rather than loading the bus.
+   - The PTC also limits the inrush into the 440 µF bulk capacitance on hot-plug.
+3. **Optional true auto-detect:** specify a **15 V** external adapter instead of 12 V, and detect the higher voltage.
+   - One 2N7002 pulls R8 in unless a Zener (about 13.3 V) plus a second 2N7002 sees more than 13 V.
+   - This needs a basic-part Zener, and the 220 µF and 470 nF caps re-rated to 25 V.
+   - The speaker stays protected because PLIMIT, not PVCC, sets the output swing (and 15 V is within the TPA3110D2's 8–26 V range).
+   - It only works if every external supply is 15 V, so option 1 plus the PTC is the more robust choice.
 - The 440 µF of bulk capacitance charges at hot-plug on either input. This is normal for Eurorack, but it is where the 100 mA figure is briefly exceeded.
 
 ### Mechanical fit on the panel
@@ -374,6 +373,6 @@ A distributor lifecycle audit (`--lifecycle`) was not run because there are no M
 
 **main_board: nearly ready, fix before the next fab run.** The amplifier core is a faithful implementation of TI's PBTL reference and is datasheet-verified pin for pin. Must fix: Q1's gate over-voltage (#1), and speaker protection (#5: R6 → 3.3k, C9/C13 → 22 nF). Should fix: the input level (#6), output current and trace width (#7), the pot courtyard collisions (#9), the electrolytic edge clearance (#10) and the V-score layer contents (#4).
 
-**Rail_adaptor: not ready to order.** Its fab outputs do not match the PCB (#2), and its 2-pin pin order is opposite to the main board's (#3).
+**Rail_adaptor: not ready to order.** Its fab outputs do not match the PCB (#2). Rework it for the DC-plug cable: centre-positive, with a ~0.2 A PTC in the +12 V line. Keep a shrouded/keyed 16-pin header.
 
 **Panel: needs a small revision.** Add the 4 speaker mounting holes and enlarge the speaker cutout to about Ø46–47 mm (#8). Also fix the V-score layer contents (#4). The outline and the jack/pot cutouts match the main board and the Eurorack spec, and the speaker fits the 10HP width.
