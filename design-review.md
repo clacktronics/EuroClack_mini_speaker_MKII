@@ -100,15 +100,33 @@ Current estimate: I ≈ Iq + P_out / (η × 12 V), with Iq = 20 mA typical (35 m
 - These figures are estimates. The 4 × V_PLIMIT rule has about ±13 % spread (§7.5: 6.75–8.75 V at V_PLIMIT = 2 V), and low-power efficiency is not specified. **Measure the +12 V current with a full-scale square wave in limit mode** and trim R8.
 - Size the external adapter for at least 1.5 A at 12 V.
 
-**Recommended: select the limit automatically instead of trusting the switch.** If the switch is left in "full" while on Eurorack power, the module will pull about 1 A from the bus. Instead, let the power source choose the mode:
-- **DC jack with a switch contact.** Use a barrel jack whose switch pin changes state when a plug is inserted, and wire that contact in place of SW1.
-  - With no plug (Eurorack power), R8 is connected and the module draws about 100 mA.
-  - With a plug in, R8 is disconnected and the module runs at the ≈5 W speaker-safe setting.
-  - SW1 can then be removed, or kept as a user "quiet" override (switch contact and SW1 in parallel).
-- **Power-path isolation.** If both supplies can be connected at once, the external 12 V must not back-feed the Eurorack bus.
-  - Use the jack's switch contact to disconnect the rail input.
-  - Or diode-OR the two inputs, with a Schottky or a second PMOS ideal diode per input.
-  - Q1's reverse-polarity protection should cover the DC jack too, because centre-negative 12 V adapters exist.
+**Recommended: select the limit automatically instead of trusting the switch.** If the switch is left in "full" while on Eurorack power, the module will pull about 1 A from the bus. Instead, let the power source choose the mode. This uses only JLC basic parts (AO3401A, 2N7002, SS14 or SS34 Schottky, resistors):
+
+```
+Eurorack +12V (J2) ──► D1 SS14 (C2480) ──┐
+        │                                  │
+        └─ 100k ─┬─ G  Q3 2N7002           ├──► +12V (common) ─► U2 PVCC …
+               100k    D ── R8 750Ω ── PLIMIT
+                 │     S ── GND            │
+                GND                        │
+DC jack +12V ──► Q1 AO3401A (D=jack, S=common, G: 100k→S, 100k→GND) ──┘
+SW1 (optional "quiet" override) in parallel with Q3 D–S
+```
+
+- **Eurorack input: Schottky D1 (SS14, C2480; or SS34, C8678).**
+  - D1 gives reverse-polarity protection and stops the DC adapter from back-feeding the bus.
+  - At about 100 mA it drops roughly 0.3 V and dissipates about 30 mW.
+  - With this, Q1 no longer needs to sit on the Eurorack path.
+- **DC-jack input: Q1 AO3401A with the gate divider above.** At about 1 A the loss is only about 50 mW, where a Schottky would lose about 0.5 W.
+- **Automatic limit: Q3 (2N7002, C8545).** Its gate is fed from the Eurorack input through a 100k/100k divider (≈6 V against its ±20 V rating).
+  - Whenever Eurorack power is present, Q3 connects R8 and the module stays at about 85 mA.
+  - With only the DC jack connected, Q3 is off and the module runs at the ≈5 W speaker-safe setting.
+  - With both connected, it stays limited, which is the conservative case.
+  - Q3's RDS(on) of a few ohms is negligible against 750 Ω.
+- **Known limitation:** on Eurorack power alone, Q1 conducts backwards, putting about 11.7 V on the DC jack pins. That is harmless with nothing plugged in. With an unpowered adapter plugged in, a small current flows into its output capacitors, but the module is still in limited mode.
+  - To remove this, drive Q1's gate low through a second 2N7002 whose gate is fed from the jack input.
+  - Q1 then turns on only when the jack itself is powered, and its body diode blocks reverse current otherwise.
+- A barrel jack with a switch contact would also work, but it is not needed with this scheme.
 - The 440 µF of bulk capacitance charges at hot-plug on either input. This is normal for Eurorack, but it is where the 100 mA figure is briefly exceeded.
 
 ### Mechanical fit on the panel
@@ -196,9 +214,12 @@ Note: SD and FAULT are "compliant to AVCC" (Table 1), but R1 pulls them to +12 V
 - Symbol `Q_PMOS_GSD` means pin 1 = G, 2 = S, 3 = D. That matches the AOS SOT-23 convention for AO3401A. The datasheet pinout is image-only, so this is **inference, high confidence**.
 - The topology is correct: drain to input, source to +12 V, gate to GND. With correct polarity the body diode conducts first, then the channel enhances.
 - **Problem (datasheet-verified, AO3401A abs-max table: VGS ±12 V):** once the channel is on, VGS ≈ −V(+12V). Eurorack supplies commonly run at 12.0–12.3 V and ring during hot-plug, so the gate is at or above its absolute maximum all the time.
-- **Fix, either of:**
-  - Add a 10–100 kΩ resistor in series with the gate (to GND) plus a 10 V Zener (or 9.1 V) from gate to source.
-  - Swap to a SOT-23 PMOS rated **VGS ±20 V** (−30 V VDS, RDS(on) < 100 mΩ at −10 V). AO3407A is one candidate; check its current rating and LCSC stock before choosing.
+- **Fix, using JLC basic parts only** (designer constraint: AO3400A, AO3401A, SI2301CDS, 2N7002). Keep AO3401A and **halve its gate drive with a resistor divider**:
+  - Add a 100k resistor from **gate to source (+12 V)**.
+  - Change the gate's direct connection to GND into another **100k from gate to GND**.
+  - The result is VGS ≈ −6 V at 12 V, and it stays within ±12 V for rail spikes up to 24 V.
+  - AO3401A RDS(on) is < 60 mΩ at −4.5 V, so there is no loss penalty. The divider draws 60 µA. Gate RC (≈50 kΩ × 645 pF ≈ 30 µs) is fast enough for power-up.
+  - SI2301CDS is worse here (VGS ±8 V, −20 V VDS). AO3400A and 2N7002 are N-channel and would need a low-side (GND-return) protector, which would break the shared audio ground with the jack sleeve. So AO3401A plus the divider is the right choice.
 
 ### Connector pin tables
 
